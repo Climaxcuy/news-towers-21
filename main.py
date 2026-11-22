@@ -1,38 +1,45 @@
-"""Deliver the finished page image to the grader's output folder.
+"""News Towers hand-in launcher (NI21 round 5, @climaxku).
 
-The artwork ships in the repo as entry.png beside this script.  The
-grader tells us where it wants the file through MAKEFUN_OUTPUT_DIR;
-when that variable is absent we fall back to the conventional /output.
+The artwork for this entry is already rendered and committed beside
+this file as ``entry.png``.  Grading does not re-render anything; it
+simply expects that exact file to appear inside the directory named
+by the ``MAKEFUN_OUTPUT_DIR`` environment variable.  This launcher
+performs that single delivery step and nothing else.
 """
 
-from pathlib import Path
 import os
 import shutil
 import sys
+from pathlib import Path
 
-SOURCE_NAME = "entry.png"
-
-
-def target_folder() -> Path:
-    """Return the destination directory, honouring the env override."""
-    raw = os.getenv("MAKEFUN_OUTPUT_DIR")
-    return Path(raw) if raw else Path("/output")
+ARTWORK_NAME = "entry.png"
+FALLBACK_DESTINATION = "/output"
 
 
-def deliver() -> Path:
-    origin = Path(__file__).resolve().parent / SOURCE_NAME
-    folder = target_folder()
-    folder.mkdir(parents=True, exist_ok=True)
-    landing = folder / SOURCE_NAME
-    shutil.copyfile(origin, landing)
-    return landing
+def resolve_destination() -> Path:
+    """Return where the artwork must be delivered.
+
+    An empty or unset variable falls back to the conventional
+    ``/output`` location so the launcher still behaves sensibly
+    when run outside the grading harness.
+    """
+    raw_value = os.environ.get("MAKEFUN_OUTPUT_DIR", "").strip()
+    return Path(raw_value) if raw_value else Path(FALLBACK_DESTINATION)
 
 
-def run() -> int:
-    placed = deliver()
-    print(f"entry image delivered: {placed} ({placed.stat().st_size} bytes)")
-    return 0
+def deliver_artwork() -> Path:
+    """Copy the committed artwork into the destination directory."""
+    source_file = Path(__file__).resolve().parent / ARTWORK_NAME
+    target_dir = resolve_destination()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    delivered_file = target_dir / ARTWORK_NAME
+    # Stream the copy in chunks so the launcher never needs to hold
+    # the whole image in memory at once.
+    with source_file.open("rb") as reader, delivered_file.open("wb") as writer:
+        shutil.copyfileobj(reader, writer, length=64 * 1024)
+    return delivered_file
 
 
 if __name__ == "__main__":
-    sys.exit(run())
+    deliver_artwork()
+    sys.exit(0)
